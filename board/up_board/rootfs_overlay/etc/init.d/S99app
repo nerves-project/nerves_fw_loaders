@@ -1,0 +1,136 @@
+#!/bin/sh
+
+#
+# Install a .fw image to eMMC
+#
+# To use this, copy the .fw file that you want on the eMMC device to the
+# EFI system partition and call it install.fw. If you want to do the
+# installation yourself, copy a shell script called install.sh over.
+#
+
+LOADER_DATA_DEV=/dev/sda2
+DESTINATION=/dev/mmcblk0
+FWIMAGE=/mnt/install.fw
+USER_SCRIPT=/mnt/install.sh
+
+leds_off() {
+    echo "none" > /sys/class/leds/upboard:yellow:/trigger
+    echo "none" > /sys/class/leds/upboard:green:/trigger
+    echo "none" > /sys/class/leds/upboard:red:/trigger
+    echo "0" > /sys/class/leds/upboard:yellow:/brightness
+    echo "0" > /sys/class/leds/upboard:green:/brightness
+    echo "0" > /sys/class/leds/upboard:red:/brightness
+}
+
+yellow_blink() {
+    leds_off
+    echo "timer" > /sys/class/leds/upboard:yellow:/trigger
+    echo "1" > /sys/class/leds/upboard:yellow:/brightness
+}
+
+green_blink() {
+    leds_off
+    echo "timer" > /sys/class/leds/upboard:green:/trigger
+    echo "1" > /sys/class/leds/upboard:green:/brightness
+}
+
+green_on() {
+    leds_off
+    echo "1" > /sys/class/leds/upboard:green:/brightness
+}
+
+red_on() {
+    leds_off
+    echo "1" > /sys/class/leds/upboard:red:/brightness
+}
+
+mount_filesystems() {
+     yellow_on
+     mount -t efivarfs efivarfs /sys/firmware/efi/efivars
+     while ! mount -t vfat -o ro $LOADER_DATA_DEV /mnt; do
+         echo "Trying to mount $LOADER_DATA_DEV..."
+         sleep 1
+     done
+     yellow_blink
+}
+
+install_ourselves() {
+    echo "Running fwup to install $FWIMAGE..."
+    /usr/bin/fwup -a -i $FWIMAGE -d $DESTINATION -t complete
+    if [ $? -ne 0 ]; then
+        echo "Installation failed! Not powering off so that the system can be debugged."
+        red_on
+        exit 1
+    fi
+
+    echo "Configuring EFI boot"
+    efibootmgr -B -b 0001
+    # The forward slashes on the loader are important. Without them efibootmgr was
+    # doubling up the backslashes and that wouldn't boot.
+    efibootmgr -c -b 0001 -d /dev/mmcblk0 -L Nerves -l /EFI/NERVES/bzImage.efi -u 'initrd=\\EFI\\NERVES\\nerves_initramfs'
+    if [ $? -ne 0 ]; then
+        echo "Installation failed! Not powering off so that the system can be debugged."
+        red_on
+        exit 1
+    fi
+    efibootmgr --bootorder 0001
+
+    # Clean up other entries if they exist
+    efibootmgr -B -b 0000
+    efibootmgr -B -b 0002
+    efibootmgr -B -b 0003
+    efibootmgr -B -b 0004
+    efibootmgr -B -b 0005
+}
+
+install_user() {
+    echo "Running $USER_SCRIPT..."
+    cd /mnt
+    sh $USER_SCRIPT
+    if [ $? -ne 0 ]; then
+        echo "Installation failed! Not powering off so that the system can be debugged."
+        red_on
+        exit 1
+    fi
+}
+
+install() {
+    yellow_blink
+    mount_filesystems
+    if [ -e $USER_SCRIPT ]; then
+        install_user
+    else
+        install_ourselves
+    fi
+
+    cd /
+    umount /mnt
+
+    echo
+    echo
+    echo
+    echo
+    echo "Installation successful!!"
+    echo
+    echo "Remove the USB drive and the device will reboot in 10 seconds..."
+
+    green_on
+
+    sleep 10
+    echo "Rebooting..."
+
+    green_blink
+    reboot
+}
+
+case "$1" in
+    start)
+        install
+        ;;
+    stop)
+        ;;
+
+    *)
+        # Don't handle any other conditions
+        exit 0
+esac
