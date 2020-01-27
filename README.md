@@ -102,7 +102,8 @@ enough that they do not require much maintenance. They're provided as an aide.
 If you make a loader using this repository, please consider contributing it back
 for others.
 
-* [UP Board](https://github.com/nerves-project/nerves_fw_loaders/board/up_board)
+* [UP Board (x86_64)](https://github.com/fhunleth/nerves_fw_loaders/blob/master/board/up_board/README.md)
+* [OnLogic CL (x86_64)](https://github.com/fhunleth/nerves_fw_loaders/blob/master/board/onlogic_cl210/README.md)
 
 ## License
 
