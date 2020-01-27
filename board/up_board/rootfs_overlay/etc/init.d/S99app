@@ -67,7 +67,7 @@ install_ourselves() {
     efibootmgr -B -b 0001
     # The forward slashes on the loader are important. Without them efibootmgr was
     # doubling up the backslashes and that wouldn't boot.
-    efibootmgr -c -b 0001 -d /dev/mmcblk0 -L Nerves -l /EFI/NERVES/bzImage.efi -u 'initrd=\\EFI\\NERVES\\nerves_initramfs'
+    efibootmgr -c -b 0001 -d $DESTINATION -L Nerves -l /EFI/NERVES/bzImage.efi -u 'initrd=\\EFI\\NERVES\\nerves_initramfs'
     if [ $? -ne 0 ]; then
         echo "Installation failed! Not powering off so that the system can be debugged."
         red_on
