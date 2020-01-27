@@ -105,6 +105,13 @@ for others.
 * [UP Board (x86_64)](https://github.com/fhunleth/nerves_fw_loaders/blob/master/board/up_board/README.md)
 * [OnLogic CL (x86_64)](https://github.com/fhunleth/nerves_fw_loaders/blob/master/board/onlogic_cl210/README.md)
 
+## Customizing
+
+The default images can be customized by adding an `install.sh` script to the
+data partition. If an `install.sh` script is found, the loader runs it instead
+of its normal processing. If the script returns successfully, the board will be
+rebooted, but if not, it will report an error and hang.
+
 ## License
 
 The project would not exist without Buildroot and follows the GPL like
