@@ -3,11 +3,8 @@
 set -e
 
 # TARGETDIR=$1
-FWNAME=$2
 
-if [[ -z $FWNAME ]]; then
-    FWNAME=up_board-$(git -C "$BR2_EXTERNAL_FIRMWARE_LOADERS_PATH" describe --dirty)
-fi
+FWNAME=nerves_fw_loader-up_board
 
 FWUP_CONFIG=$BR2_EXTERNAL_FIRMWARE_LOADERS_PATH/board/up_board/fwup.conf
 FWUP=$HOST_DIR/usr/bin/fwup
