@@ -1,5 +1,7 @@
 # Nerves Firmware Loaders
 
+[![CircleCI](https://circleci.com/gh/nerves-project/nerves_fw_loaders.svg?style=svg)](https://circleci.com/gh/nerves-project/nerves_fw_loaders)
+
 This project contains simple first-time firmware loaders for installing Nerves
 firmware (or other code) on internal device storage. Target devices usually have
 eMMC memory but can boot off removable media like a USB flash drive or SD card.
