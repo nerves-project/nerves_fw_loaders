@@ -54,7 +54,7 @@ partition to appear.
 On Linux, this looks something like this at the commandline:
 
 ```sh
-cp my_firmware.fw /media/fhunleth/LOADER/loader.fw
+cp my_firmware.fw /media/fhunleth/LOADER/install.fw
 ```
 
 On Mac, the `LOADER` partition won't appear, but `mtools` can do the copy:
