@@ -16,7 +16,7 @@ USER_SCRIPT=/mnt/install.sh
 mount_filesystems() {
      mount -t efivarfs efivarfs /sys/firmware/efi/efivars
      while ! mount -t vfat -o ro $LOADER_DATA_DEV /mnt; do
-         echo "Trying to mount $LOADER_DATA_DEV..."
+         echo "$LOADER_DATA_DEV not ready yet. Trying again..."
          sleep 1
      done
 }
