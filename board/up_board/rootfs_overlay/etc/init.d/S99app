@@ -44,6 +44,11 @@ red_on() {
     echo "1" > /sys/class/leds/upboard:red:/brightness
 }
 
+yellow_on() {
+    leds_off
+    echo "1" > /sys/class/leds/upboard:yellow:/brightness
+}
+
 mount_filesystems() {
      yellow_on
      mount -t efivarfs efivarfs /sys/firmware/efi/efivars
