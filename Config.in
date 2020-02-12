@@ -1,2 +1,4 @@
 # Custom packages
 
+source "$BR2_EXTERNAL_FIRMWARE_LOADERS_PATH/package/boardid/Config.in"
+
