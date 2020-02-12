@@ -6,6 +6,8 @@ set -e
 
 FWNAME=nerves_fw_loader-onlogic_cl210
 
+$BR2_EXTERNAL_FIRMWARE_LOADERS_PATH/board/common/generate-readme.sh "the OnLogic CL210"
+
 FWUP_CONFIG=$BR2_EXTERNAL_FIRMWARE_LOADERS_PATH/board/onlogic_cl210/fwup.conf
 FWUP=$HOST_DIR/usr/bin/fwup
 

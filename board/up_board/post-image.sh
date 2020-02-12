@@ -6,6 +6,8 @@ set -e
 
 FWNAME=nerves_fw_loader-up_board
 
+$BR2_EXTERNAL_FIRMWARE_LOADERS_PATH/board/common/generate-readme.sh "the UP Board"
+
 FWUP_CONFIG=$BR2_EXTERNAL_FIRMWARE_LOADERS_PATH/board/up_board/fwup.conf
 FWUP=$HOST_DIR/usr/bin/fwup
 
