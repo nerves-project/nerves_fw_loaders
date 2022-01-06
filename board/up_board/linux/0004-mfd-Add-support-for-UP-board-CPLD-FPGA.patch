@@ -1,7 +1,7 @@
-From 974fd6345a9e8be274e567fbf9bf78692e1e3b38 Mon Sep 17 00:00:00 2001
+From 1c148e619346707cbe9019e4553ffd471a2588df Mon Sep 17 00:00:00 2001
 From: Carlos Calderon <carlos@emutex.com>
 Date: Thu, 4 Oct 2018 10:40:49 +0100
-Subject: [PATCH 09/19] mfd: Add support for UP board CPLD/FPGA
+Subject: [PATCH] mfd: Add support for UP board CPLD/FPGA
 
 The UP Squared board <http://www.upboard.com> implements certain
 features (pin control, onboard LEDs or CEC) through an on-board FPGA.
@@ -25,53 +25,54 @@ Signed-off-by: Nicola Lunghi <nicola.lunghi@emutex.com>
 ---
  drivers/leds/Kconfig              |   7 +
  drivers/leds/Makefile             |   1 +
- drivers/leds/leds-upboard.c       |  88 +++++
+ drivers/leds/leds-upboard.c       |  88 ++++
  drivers/mfd/Kconfig               |   6 +
  drivers/mfd/Makefile              |   1 +
- drivers/mfd/upboard-fpga.c        | 411 ++++++++++++++++++++
+ drivers/mfd/upboard-fpga.c        | 411 +++++++++++++++
  drivers/pinctrl/Kconfig           |  12 +
  drivers/pinctrl/Makefile          |   1 +
- drivers/pinctrl/pinctrl-upboard.c | 797 ++++++++++++++++++++++++++++++++++++++
- include/linux/mfd/upboard-fpga.h  |  52 +++
- 10 files changed, 1376 insertions(+)
+ drivers/pinctrl/core.c            | 341 +++++++------
+ drivers/pinctrl/pinctrl-upboard.c | 797 ++++++++++++++++++++++++++++++
+ include/linux/mfd/upboard-fpga.h  |  52 ++
+ 11 files changed, 1563 insertions(+), 154 deletions(-)
  create mode 100644 drivers/leds/leds-upboard.c
  create mode 100644 drivers/mfd/upboard-fpga.c
  create mode 100644 drivers/pinctrl/pinctrl-upboard.c
  create mode 100644 include/linux/mfd/upboard-fpga.h
 
 diff --git a/drivers/leds/Kconfig b/drivers/leds/Kconfig
-index 52ea34e..891e746 100644
+index 56e8198e13d1..b24bb27e9917 100644
 --- a/drivers/leds/Kconfig
 +++ b/drivers/leds/Kconfig
-@@ -696,6 +696,13 @@ config LEDS_NIC78BX
- 	  To compile this driver as a module, choose M here: the module
- 	  will be called leds-nic78bx.
+@@ -929,6 +929,13 @@ config LEDS_ACER_A500
+ 	  This option enables support for the Power Button LED of
+ 	  Acer Iconia Tab A500.
  
 +config LEDS_UPBOARD
-+	tristate "LED support for the UP board"
-+	depends on LEDS_CLASS
-+	depends on MFD_UPBOARD_FPGA
-+	help
-+	  This option enables support for the UP board LEDs.
++        tristate "LED support for the UP board"
++        depends on LEDS_CLASS
++        depends on MFD_UPBOARD_FPGA
++        help
++          This option enables support for the UP board LEDs.
 +
  comment "LED Triggers"
  source "drivers/leds/trigger/Kconfig"
  
 diff --git a/drivers/leds/Makefile b/drivers/leds/Makefile
-index 3598045..c8b8ee8 100644
+index 73e603e1727e..989883154322 100644
 --- a/drivers/leds/Makefile
 +++ b/drivers/leds/Makefile
-@@ -73,6 +73,7 @@ obj-$(CONFIG_LEDS_PM8058)		+= leds-pm8058.o
+@@ -68,6 +68,7 @@ obj-$(CONFIG_LEDS_MIKROTIK_RB532)	+= leds-rb532.o
  obj-$(CONFIG_LEDS_MLXCPLD)		+= leds-mlxcpld.o
- obj-$(CONFIG_LEDS_NIC78BX)		+= leds-nic78bx.o
+ obj-$(CONFIG_LEDS_MLXREG)		+= leds-mlxreg.o
  obj-$(CONFIG_LEDS_MT6323)		+= leds-mt6323.o
-+obj-$(CONFIG_LEDS_UPBOARD)		+= leds-upboard.o
- 
- # LED SPI Drivers
- obj-$(CONFIG_LEDS_DAC124S085)		+= leds-dac124s085.o
++obj-$(CONFIG_LEDS_UPBOARD)              += leds-upboard.o
+ obj-$(CONFIG_LEDS_NET48XX)		+= leds-net48xx.o
+ obj-$(CONFIG_LEDS_NETXBIG)		+= leds-netxbig.o
+ obj-$(CONFIG_LEDS_NIC78BX)		+= leds-nic78bx.o
 diff --git a/drivers/leds/leds-upboard.c b/drivers/leds/leds-upboard.c
 new file mode 100644
-index 0000000..16bd1b7
+index 000000000000..16bd1b7c0a1e
 --- /dev/null
 +++ b/drivers/leds/leds-upboard.c
 @@ -0,0 +1,88 @@
@@ -165,29 +166,29 @@ index 0000000..16bd1b7
 +MODULE_ALIAS("platform:upboard-led");
 \ No newline at end of file
 diff --git a/drivers/mfd/Kconfig b/drivers/mfd/Kconfig
-index fc5e4fe..2d2b73e 100644
+index b8847ae04d93..6918d53f8fe0 100644
 --- a/drivers/mfd/Kconfig
 +++ b/drivers/mfd/Kconfig
-@@ -1781,6 +1781,12 @@ config MFD_STM32_TIMERS
- 	  for PWM and IIO Timer. This driver allow to share the
- 	  registers between the others drivers.
+@@ -2099,6 +2099,12 @@ config MFD_KHADAS_MCU
+ 	  additional drivers must be enabled in order to use the functionality
+ 	  of the device.
  
 +config MFD_UPBOARD_FPGA
-+	tristate "Support for the UP board FPGA"
-+	select MFD_CORE
-+	help
-+	  Select this option to enable the UP and UP^2 on-board FPGA.
++        tristate "Support for the UP board FPGA"
++        select MFD_CORE
++        help
++          Select this option to enable the UP and UP^2 on-board FPGA.
 +
  menu "Multimedia Capabilities Port drivers"
  	depends on ARCH_SA1100
  
 diff --git a/drivers/mfd/Makefile b/drivers/mfd/Makefile
-index 8703ff1..7c8859f 100644
+index 1780019d2474..25df7b548fb9 100644
 --- a/drivers/mfd/Makefile
 +++ b/drivers/mfd/Makefile
-@@ -223,6 +223,7 @@ obj-$(CONFIG_MFD_MT6397)	+= mt6397-core.o
- 
- obj-$(CONFIG_MFD_ALTERA_A10SR)	+= altera-a10sr.o
+@@ -252,6 +252,7 @@ obj-$(CONFIG_MFD_ALTERA_A10SR)	+= altera-a10sr.o
+ obj-$(CONFIG_MFD_ALTERA_SYSMGR) += altera-sysmgr.o
+ obj-$(CONFIG_MFD_STPMIC1)	+= stpmic1.o
  obj-$(CONFIG_MFD_SUN4I_GPADC)	+= sun4i-gpadc.o
 +obj-$(CONFIG_MFD_UPBOARD_FPGA)  += upboard-fpga.o
  
@@ -195,7 +196,7 @@ index 8703ff1..7c8859f 100644
  obj-$(CONFIG_MFD_STM32_TIMERS) 	+= stm32-timers.o
 diff --git a/drivers/mfd/upboard-fpga.c b/drivers/mfd/upboard-fpga.c
 new file mode 100644
-index 0000000..9f444f8
+index 000000000000..9f444f876af1
 --- /dev/null
 +++ b/drivers/mfd/upboard-fpga.c
 @@ -0,0 +1,411 @@
@@ -612,43 +613,465 @@ index 0000000..9f444f8
 +MODULE_LICENSE("GPL v2");
 \ No newline at end of file
 diff --git a/drivers/pinctrl/Kconfig b/drivers/pinctrl/Kconfig
-index a73c794..5697684 100644
+index 815095326e2d..0f207d189f64 100644
 --- a/drivers/pinctrl/Kconfig
 +++ b/drivers/pinctrl/Kconfig
-@@ -349,6 +349,18 @@ config PINCTRL_RK805
+@@ -362,6 +362,18 @@ config PINCTRL_RK805
  	help
  	  This selects the pinctrl driver for RK805.
  
 +config PINCTRL_UPBOARD
-+	tristate "UP board FPGA pin controller"
-+	depends on ACPI
-+	depends on MFD_UPBOARD_FPGA
-+	select GENERIC_PINCONF
-+	select PINMUX
-+	select PINCONF
-+	help
-+	  Pin controller for the FPGA GPIO lines on UP boards. Due to the
-+	  hardware layout, these are meant to be controlled in tandem with their
-+	  corresponding Intel SoC GPIOs.
++        tristate "UP board FPGA pin controller"
++        depends on ACPI
++        depends on MFD_UPBOARD_FPGA
++        select GENERIC_PINCONF
++        select PINMUX
++        select PINCONF
++        help
++          Pin controller for the FPGA GPIO lines on UP boards. Due to the
++          hardware layout, these are meant to be controlled in tandem with their
++          corresponding Intel SoC GPIOs.
 +
- source "drivers/pinctrl/aspeed/Kconfig"
- source "drivers/pinctrl/bcm/Kconfig"
- source "drivers/pinctrl/berlin/Kconfig"
+ config PINCTRL_OCELOT
+ 	bool "Pinctrl driver for the Microsemi Ocelot and Jaguar2 SoCs"
+ 	depends on OF
 diff --git a/drivers/pinctrl/Makefile b/drivers/pinctrl/Makefile
-index d0d4844..dcee3190 100644
+index f53933b2ff02..81a059a6ca64 100644
 --- a/drivers/pinctrl/Makefile
 +++ b/drivers/pinctrl/Makefile
-@@ -45,6 +45,7 @@ obj-$(CONFIG_PINCTRL_ST) 	+= pinctrl-st.o
+@@ -45,6 +45,7 @@ obj-$(CONFIG_PINCTRL_STMFX) 	+= pinctrl-stmfx.o
  obj-$(CONFIG_PINCTRL_ZYNQ)	+= pinctrl-zynq.o
  obj-$(CONFIG_PINCTRL_INGENIC)	+= pinctrl-ingenic.o
  obj-$(CONFIG_PINCTRL_RK805)	+= pinctrl-rk805.o
-+obj-$(CONFIG_PINCTRL_UPBOARD)	+= pinctrl-upboard.o
++obj-$(CONFIG_PINCTRL_UPBOARD)   += pinctrl-upboard.o
+ obj-$(CONFIG_PINCTRL_OCELOT)	+= pinctrl-ocelot.o
+ obj-$(CONFIG_PINCTRL_EQUILIBRIUM)   += pinctrl-equilibrium.o
  
- obj-$(CONFIG_ARCH_ASPEED)	+= aspeed/
- obj-y				+= bcm/
+diff --git a/drivers/pinctrl/core.c b/drivers/pinctrl/core.c
+index 840000870d5a..efd31be388b2 100644
+--- a/drivers/pinctrl/core.c
++++ b/drivers/pinctrl/core.c
+@@ -266,8 +266,7 @@ static int pinctrl_register_pins(struct pinctrl_dev *pctldev,
+  * and pin list based GPIO ranges is managed correctly by this function.
+  *
+  * This function assumes the gpio is part of the specified GPIO range, use
+- * only after making sure this is the case (e.g. by calling it on the
+- * result of successful pinctrl_get_device_gpio_range calls)!
++ * only after making sure this is the case!
+  */
+ static inline int gpio_to_pin(struct pinctrl_gpio_range *range,
+ 				unsigned int gpio)
+@@ -306,92 +305,6 @@ pinctrl_match_gpio_range(struct pinctrl_dev *pctldev, unsigned gpio)
+ 	return NULL;
+ }
+ 
+-/**
+- * pinctrl_ready_for_gpio_range() - check if other GPIO pins of
+- * the same GPIO chip are in range
+- * @gpio: gpio pin to check taken from the global GPIO pin space
+- *
+- * This function is complement of pinctrl_match_gpio_range(). If the return
+- * value of pinctrl_match_gpio_range() is NULL, this function could be used
+- * to check whether pinctrl device is ready or not. Maybe some GPIO pins
+- * of the same GPIO chip don't have back-end pinctrl interface.
+- * If the return value is true, it means that pinctrl device is ready & the
+- * certain GPIO pin doesn't have back-end pinctrl device. If the return value
+- * is false, it means that pinctrl device may not be ready.
+- */
+-#ifdef CONFIG_GPIOLIB
+-static bool pinctrl_ready_for_gpio_range(unsigned gpio)
+-{
+-	struct pinctrl_dev *pctldev;
+-	struct pinctrl_gpio_range *range = NULL;
+-	struct gpio_chip *chip = gpio_to_chip(gpio);
+-
+-	if (WARN(!chip, "no gpio_chip for gpio%i?", gpio))
+-		return false;
+-
+-	mutex_lock(&pinctrldev_list_mutex);
+-
+-	/* Loop over the pin controllers */
+-	list_for_each_entry(pctldev, &pinctrldev_list, node) {
+-		/* Loop over the ranges */
+-		mutex_lock(&pctldev->mutex);
+-		list_for_each_entry(range, &pctldev->gpio_ranges, node) {
+-			/* Check if any gpio range overlapped with gpio chip */
+-			if (range->base + range->npins - 1 < chip->base ||
+-			    range->base > chip->base + chip->ngpio - 1)
+-				continue;
+-			mutex_unlock(&pctldev->mutex);
+-			mutex_unlock(&pinctrldev_list_mutex);
+-			return true;
+-		}
+-		mutex_unlock(&pctldev->mutex);
+-	}
+-
+-	mutex_unlock(&pinctrldev_list_mutex);
+-
+-	return false;
+-}
+-#else
+-static bool pinctrl_ready_for_gpio_range(unsigned gpio) { return true; }
+-#endif
+-
+-/**
+- * pinctrl_get_device_gpio_range() - find device for GPIO range
+- * @gpio: the pin to locate the pin controller for
+- * @outdev: the pin control device if found
+- * @outrange: the GPIO range if found
+- *
+- * Find the pin controller handling a certain GPIO pin from the pinspace of
+- * the GPIO subsystem, return the device and the matching GPIO range. Returns
+- * -EPROBE_DEFER if the GPIO range could not be found in any device since it
+- * may still have not been registered.
+- */
+-static int pinctrl_get_device_gpio_range(unsigned gpio,
+-					 struct pinctrl_dev **outdev,
+-					 struct pinctrl_gpio_range **outrange)
+-{
+-	struct pinctrl_dev *pctldev;
+-
+-	mutex_lock(&pinctrldev_list_mutex);
+-
+-	/* Loop over the pin controllers */
+-	list_for_each_entry(pctldev, &pinctrldev_list, node) {
+-		struct pinctrl_gpio_range *range;
+-
+-		range = pinctrl_match_gpio_range(pctldev, gpio);
+-		if (range) {
+-			*outdev = pctldev;
+-			*outrange = range;
+-			mutex_unlock(&pinctrldev_list_mutex);
+-			return 0;
+-		}
+-	}
+-
+-	mutex_unlock(&pinctrldev_list_mutex);
+-
+-	return -EPROBE_DEFER;
+-}
+-
+ /**
+  * pinctrl_add_gpio_range() - register a GPIO range for a controller
+  * @pctldev: pin controller device to add the range to
+@@ -706,6 +619,57 @@ static inline void pinctrl_generic_free_groups(struct pinctrl_dev *pctldev)
+ }
+ #endif /* CONFIG_GENERIC_PINCTRL_GROUPS */
+ 
++void pinctrl_free_gpio_locked(unsigned int gpio)
++{
++	struct pinctrl_dev *pctldev;
++
++	list_for_each_entry(pctldev, &pinctrldev_list, node) {
++		struct pinctrl_gpio_range *range =
++			pinctrl_match_gpio_range(pctldev, gpio);
++		if (range != NULL) {
++			int pin;
++
++			mutex_lock(&pctldev->mutex);
++			pin = gpio_to_pin(range, gpio);
++			pinmux_free_gpio(pctldev, pin, range);
++			mutex_unlock(&pctldev->mutex);
++		}
++	}
++}
++
++static int pinctrl_request_if_match(struct pinctrl_dev *pctldev,
++				    unsigned int gpio, int dir)
++{
++	struct pinctrl_gpio_range *range =
++		pinctrl_match_gpio_range(pctldev, gpio);
++	int ret;
++
++	if (range != NULL) {
++		int pin;
++
++		mutex_lock(&pctldev->mutex);
++		pin = gpio_to_pin(range, gpio);
++
++		ret = pinmux_request_gpio(pctldev, range, pin, gpio);
++		if (ret) {
++			mutex_unlock(&pctldev->mutex);
++			return ret;
++		}
++
++		if (dir >= 0) {
++			ret = pinmux_gpio_direction(pctldev, range, pin, dir);
++			if (ret) {
++				mutex_unlock(&pctldev->mutex);
++				return ret;
++			}
++		}
++		mutex_unlock(&pctldev->mutex);
++
++	}
++
++	return 0;
++}
++
+ /**
+  * pinctrl_get_group_selector() - returns the group selector for a group
+  * @pctldev: the pin controller handling the group
+@@ -742,25 +706,27 @@ bool pinctrl_gpio_can_use_line(unsigned gpio)
+ {
+ 	struct pinctrl_dev *pctldev;
+ 	struct pinctrl_gpio_range *range;
+-	bool result;
++	bool result = true;
+ 	int pin;
+ 
+-	/*
+-	 * Try to obtain GPIO range, if it fails
+-	 * we're probably dealing with GPIO driver
+-	 * without a backing pin controller - bail out.
+-	 */
+-	if (pinctrl_get_device_gpio_range(gpio, &pctldev, &range))
+-		return true;
+-
+-	mutex_lock(&pctldev->mutex);
+-
+-	/* Convert to the pin controllers number space */
+-	pin = gpio_to_pin(range, gpio);
++	mutex_lock(&pinctrldev_list_mutex);
+ 
+-	result = pinmux_can_be_used_for_gpio(pctldev, pin);
++        /*
++         * Try to obtain GPIO range, if it fails
++         * we're probably dealing with GPIO driver
++         * without a backing pin controller - bail out.
++         */
++	list_for_each_entry(pctldev, &pinctrldev_list, node) {
++		range = pinctrl_match_gpio_range(pctldev, gpio);
++		if (range != NULL) {
++			mutex_lock(&pctldev->mutex);
++			pin = gpio_to_pin(range, gpio);
++			result = result && pinmux_can_be_used_for_gpio(pctldev, pin);
++			mutex_unlock(&pctldev->mutex);
++		}
++	}
+ 
+-	mutex_unlock(&pctldev->mutex);
++	mutex_unlock(&pinctrldev_list_mutex);
+ 
+ 	return result;
+ }
+@@ -774,28 +740,53 @@ EXPORT_SYMBOL_GPL(pinctrl_gpio_can_use_line);
+  * as part of their gpio_request() semantics, platforms and individual drivers
+  * shall *NOT* request GPIO pins to be muxed in.
+  */
+-int pinctrl_gpio_request(unsigned gpio)
++int pinctrl_gpio_request(unsigned int gpio)
+ {
+ 	struct pinctrl_dev *pctldev;
+-	struct pinctrl_gpio_range *range;
+-	int ret;
+-	int pin;
++	struct gpio_desc *desc;
++	int dir;
++	int ret = -EPROBE_DEFER;
+ 
+-	ret = pinctrl_get_device_gpio_range(gpio, &pctldev, &range);
+-	if (ret) {
+-		if (pinctrl_ready_for_gpio_range(gpio))
+-			ret = 0;
+-		return ret;
++	desc = gpio_to_desc(gpio);
++	if (!desc) {
++		pr_err("gpio_to_desc(%d) returned NULL", gpio);
++		return -ENODEV;
+ 	}
+ 
+-	mutex_lock(&pctldev->mutex);
++	dir = gpiod_get_direction(desc);
+ 
+-	/* Convert to the pin controllers number space */
+-	pin = gpio_to_pin(range, gpio);
++	mutex_lock(&pinctrldev_list_mutex);
+ 
+-	ret = pinmux_request_gpio(pctldev, range, pin, gpio);
++	/*
++	 * NOTE: this code suppose that if we have multiple pinctrl declared for
++	 * the same gpio those are configured in series.
++	 * In this situation we need to avoid the case were momentarely
++	 * multiple pinctrl try do drive the same line to a different logic value
++	 *
++	 * (1st pinctrl) 1>-----<0 (2nd pinctrl)
++	 *
++	 * To obtain that we need to mind the order in which the multiple pinctrl
++	 * are configured depending of the desired gpio direction (input, output)
++	 */
++	if (dir == 1) {
++		list_for_each_entry(pctldev, &pinctrldev_list, node) {
++			ret = pinctrl_request_if_match(pctldev, gpio, dir);
++			if (ret) {
++				pinctrl_free_gpio_locked(gpio);
++				break;
++			}
++		}
++	} else {
++		list_for_each_entry_reverse(pctldev, &pinctrldev_list, node) {
++			ret = pinctrl_request_if_match(pctldev, gpio, dir);
++			if (ret) {
++				pinctrl_free_gpio_locked(gpio);
++				break;
++			}
++		}
++	}
+ 
+-	mutex_unlock(&pctldev->mutex);
++	mutex_unlock(&pinctrldev_list_mutex);
+ 
+ 	return ret;
+ }
+@@ -809,47 +800,64 @@ EXPORT_SYMBOL_GPL(pinctrl_gpio_request);
+  * as part of their gpio_free() semantics, platforms and individual drivers
+  * shall *NOT* request GPIO pins to be muxed out.
+  */
+-void pinctrl_gpio_free(unsigned gpio)
++void pinctrl_gpio_free(unsigned int gpio)
+ {
+-	struct pinctrl_dev *pctldev;
+-	struct pinctrl_gpio_range *range;
+-	int ret;
+-	int pin;
++	mutex_lock(&pinctrldev_list_mutex);
+ 
+-	ret = pinctrl_get_device_gpio_range(gpio, &pctldev, &range);
+-	if (ret) {
+-		return;
+-	}
+-	mutex_lock(&pctldev->mutex);
++	pinctrl_free_gpio_locked(gpio);
++
++	mutex_unlock(&pinctrldev_list_mutex);
++}
++EXPORT_SYMBOL_GPL(pinctrl_gpio_free);
+ 
+-	/* Convert to the pin controllers number space */
+-	pin = gpio_to_pin(range, gpio);
++static int pinctrl_set_dir_if_match(struct pinctrl_dev *pctldev,
++				    unsigned int gpio, bool input)
++{
++	struct pinctrl_gpio_range *range =
++		pinctrl_match_gpio_range(pctldev, gpio);
++	int ret = 0;
+ 
+-	pinmux_free_gpio(pctldev, pin, range);
++	if (range != NULL) {
++		int pin;
+ 
+-	mutex_unlock(&pctldev->mutex);
++		mutex_lock(&pctldev->mutex);
++		pin = gpio_to_pin(range, gpio);
++		ret = pinmux_gpio_direction(pctldev, range, pin, input);
++		mutex_unlock(&pctldev->mutex);
++	}
++
++	return ret;
+ }
+-EXPORT_SYMBOL_GPL(pinctrl_gpio_free);
+ 
+ static int pinctrl_gpio_direction(unsigned gpio, bool input)
+ {
+ 	struct pinctrl_dev *pctldev;
+-	struct pinctrl_gpio_range *range;
+-	int ret;
+-	int pin;
+-
+-	ret = pinctrl_get_device_gpio_range(gpio, &pctldev, &range);
+-	if (ret) {
+-		return ret;
+-	}
++	int ret = -EPROBE_DEFER;
+ 
+-	mutex_lock(&pctldev->mutex);
++	mutex_lock(&pinctrldev_list_mutex);
+ 
+-	/* Convert to the pin controllers number space */
+-	pin = gpio_to_pin(range, gpio);
+-	ret = pinmux_gpio_direction(pctldev, range, pin, input);
++	/*
++	 * FIXME UP-specific
++	 * The two pin controllers (SoC, FPGA) share the GPIO line. Avoid
++	 * getting into a situation where both are momentarily trying to drive
++	 * the line (i.e. SoC as output and FPGA as HAT-to-SoC input) by walking
++	 * the list in opposite directions for the input and output cases.
++	 */
++	if (input) {
++		list_for_each_entry(pctldev, &pinctrldev_list, node) {
++			ret = pinctrl_set_dir_if_match(pctldev, gpio, input);
++			if (ret)
++				break;
++		}
++	} else {
++		list_for_each_entry_reverse(pctldev, &pinctrldev_list, node) {
++			ret = pinctrl_set_dir_if_match(pctldev, gpio, input);
++			if (ret)
++				break;
++		}
++	}
+ 
+-	mutex_unlock(&pctldev->mutex);
++	mutex_unlock(&pinctrldev_list_mutex);
+ 
+ 	return ret;
+ }
+@@ -894,18 +902,43 @@ EXPORT_SYMBOL_GPL(pinctrl_gpio_direction_output);
+ int pinctrl_gpio_set_config(unsigned gpio, unsigned long config)
+ {
+ 	unsigned long configs[] = { config };
+-	struct pinctrl_gpio_range *range;
+ 	struct pinctrl_dev *pctldev;
+-	int ret, pin;
++	struct gpio_desc *desc;
++	int dir;
++	int ret = -EPROBE_DEFER;
+ 
+-	ret = pinctrl_get_device_gpio_range(gpio, &pctldev, &range);
+-	if (ret)
+-		return ret;
++	desc = gpio_to_desc(gpio);
++	if (!desc) {
++		pr_err("gpio_to_desc(%d) returned NULL", gpio);
++		return -ENODEV;
++	}
+ 
+-	mutex_lock(&pctldev->mutex);
+-	pin = gpio_to_pin(range, gpio);
+-	ret = pinconf_set_config(pctldev, pin, configs, ARRAY_SIZE(configs));
+-	mutex_unlock(&pctldev->mutex);
++	dir = gpiod_get_direction(desc);
++
++	mutex_lock(&pinctrldev_list_mutex);
++
++	/*
++	 * NOTE: this code suppose that if we have multiple pinctrl declared for
++	 * the same gpio those are configured in series.
++	 * In this situation we need to avoid the case were momentarely
++	 * multiple pinctrl try do drive the same line to a different logic value
++	 *
++	 * (1st pinctrl) 1>-----<0 (2nd pinctrl)
++	 *
++	 * To obtain that we need to mind the order in which the multiple pinctrl
++	 * are configured depending of the desired gpio direction (input, output)
++	 */
++	if (dir == 1) {
++		list_for_each_entry(pctldev, &pinctrldev_list, node) {
++			ret = pinconf_set_config(pctldev, gpio, configs, ARRAY_SIZE(configs));
++		}
++	} else {
++		list_for_each_entry_reverse(pctldev, &pinctrldev_list, node) {
++			ret = pinconf_set_config(pctldev, gpio, configs, ARRAY_SIZE(configs));
++		}
++	}
++
++	mutex_unlock(&pinctrldev_list_mutex);
+ 
+ 	return ret;
+ }
 diff --git a/drivers/pinctrl/pinctrl-upboard.c b/drivers/pinctrl/pinctrl-upboard.c
 new file mode 100644
-index 0000000..64899e9
+index 000000000000..64899e988bb5
 --- /dev/null
 +++ b/drivers/pinctrl/pinctrl-upboard.c
 @@ -0,0 +1,797 @@
@@ -1452,7 +1875,7 @@ index 0000000..64899e9
 \ No newline at end of file
 diff --git a/include/linux/mfd/upboard-fpga.h b/include/linux/mfd/upboard-fpga.h
 new file mode 100644
-index 0000000..cd7fb81
+index 000000000000..cd7fb812d3b2
 --- /dev/null
 +++ b/include/linux/mfd/upboard-fpga.h
 @@ -0,0 +1,52 @@
@@ -1510,5 +1933,5 @@ index 0000000..cd7fb81
 +#endif /*  __LINUX_MFD_UPBOARD_FPGA_H */
 \ No newline at end of file
 -- 
-2.7.4
+2.25.1
 

@@ -1,20 +1,58 @@
-From 5d233106e4069a4a794d52dd685e97c51eba6120 Mon Sep 17 00:00:00 2001
-From: prubio <prubio@elitegrupo.com>
-Date: Fri, 3 May 2019 15:33:24 +0200
+From 21711931514f66979e92acac4ada0ced3e9c9dc9 Mon Sep 17 00:00:00 2001
+From: Carlos Calderon <carlos.calderon@emutex.com>
+Date: Wed, 20 Feb 2019 16:49:37 +0000
 Subject: [PATCH] ACPI: Add support to map GPIO resources to ranges
 
+All of this is selectively taken from:
+    https://github.com/AaeonCM/meta-up-board/tree/warrior/recipes-kernel/linux/files
+
+====================================================================================
 Add a function to gpiolib to facilitate registering a pin controller for
 a range of GPIO pins, but using ACPI resource references and without
 claiming the GPIO resource.
+====================================================================================
+Add support for chaining pinctrl drivers controlling the same GPIO line.
+This allows for hardware configurations where multiple controllers must
+to be configured to change the function or electrical properties of the
+line.
+
+Such is the case of the UP board family. On these boards, GPIO and other
+SoC functions are provided by a 40-pin Raspberry Pi compatible header,
+plus custom headers on certain models. However, for added flexibility,
+there is a FPGA between the SoC and these physical pins. In its default
+configuration, this FPGA implements a pin controller for FPGA-connected
+pins. This setup requires coordination between the SoC GPIO controller
+and the FPGA-based controller, hence this patch.
+====================================================================================
+Expose regmap_writable function to check if a register is writable
+====================================================================================
+The UP Squared board <http://www.upboard.com> implements certain
+features (pin control, onboard LEDs or CEC) through an on-board FPGA.
+
+This mfd driver implements the line protocol to read and write registers
+from the FPGA through regmap. The register address map is also included.
+
+The UP boards come with a few FPGA-controlled onboard LEDs:
+* UP Board: yellow, green, red
+* UP Squared: blue, yellow, green, red
+
+The UP Boards provide a few I/O pin headers (for both GPIO and
+functions), including a 40-pin Raspberry Pi compatible header.
+
+This patch implements support for the FPGA-based pin controller that
+manages direction and enable state for those header pins.
+====================================================================================
+[PATCH 12/19] acpi: acpi_node_add_pin_mapping added to header file.
+====================================================================================
 ---
- drivers/gpio/gpiolib-acpi.c | 88 ++++++++++++++++++++++++++++++++++++---------
+ drivers/gpio/gpiolib-acpi.c | 88 ++++++++++++++++++++++++++++++-------
  1 file changed, 71 insertions(+), 17 deletions(-)
 
 diff --git a/drivers/gpio/gpiolib-acpi.c b/drivers/gpio/gpiolib-acpi.c
-index 57d157e..b2412a7 100644
+index 6f11714ce023..2b8c172be7a6 100644
 --- a/drivers/gpio/gpiolib-acpi.c
 +++ b/drivers/gpio/gpiolib-acpi.c
-@@ -1213,6 +1213,32 @@ static int acpi_find_gpio_count(struct acpi_resource *ares, void *data)
+@@ -1294,6 +1294,32 @@ static int acpi_find_gpio_count(struct acpi_resource *ares, void *data)
  	return 1;
  }
  
@@ -45,9 +83,9 @@ index 57d157e..b2412a7 100644
 +}
 +
  /**
-  * acpi_gpio_count - return the number of GPIOs associated with a
-  *		device / function or -ENOENT if no GPIO has been
-@@ -1223,10 +1249,7 @@ static int acpi_find_gpio_count(struct acpi_resource *ares, void *data)
+  * acpi_gpio_count - count the GPIOs associated with a device / function
+  * @dev:	GPIO consumer, can be %NULL for system-global GPIOs
+@@ -1306,10 +1332,7 @@ static int acpi_find_gpio_count(struct acpi_resource *ares, void *data)
  int acpi_gpio_count(struct device *dev, const char *con_id)
  {
  	struct acpi_device *adev = ACPI_COMPANION(dev);
@@ -58,7 +96,7 @@ index 57d157e..b2412a7 100644
  	char propname[32];
  	unsigned int i;
  
-@@ -1239,20 +1262,7 @@ int acpi_gpio_count(struct device *dev, const char *con_id)
+@@ -1322,20 +1345,7 @@ int acpi_gpio_count(struct device *dev, const char *con_id)
  			snprintf(propname, sizeof(propname), "%s",
  				 gpio_suffixes[i]);
  
@@ -80,7 +118,7 @@ index 57d157e..b2412a7 100644
  		if (count > 0)
  			break;
  	}
-@@ -1275,6 +1285,50 @@ int acpi_gpio_count(struct device *dev, const char *con_id)
+@@ -1358,6 +1368,50 @@ int acpi_gpio_count(struct device *dev, const char *con_id)
  	return count ? count : -ENOENT;
  }
  
@@ -128,9 +166,9 @@ index 57d157e..b2412a7 100644
 +}
 +EXPORT_SYMBOL_GPL(acpi_node_add_pin_mapping);
 +
- bool acpi_can_fallback_to_crs(struct acpi_device *adev, const char *con_id)
+ /* Run deferred acpi_gpiochip_request_irqs() */
+ static int __init acpi_gpio_handle_deferred_request_irqs(void)
  {
- 	/* Never allow fallback if the device has properties */
 -- 
-2.7.4
+2.25.1
 
